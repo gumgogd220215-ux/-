@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>핀볼 레이스 - 완전 커스터마이징</title>
+<style>
+  body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #222;
+    color: #fff;
+    margin: 0;
+    padding: 20px;
+  }
+  canvas {
+    background: #111;
+    border: 2px solid #fff;
+    margin-top: 20px;
+    cursor: crosshair;
+  }
+  #controls {
+    margin-bottom: 20px;
+  }
+  input, button {
+    margin-right: 10px;
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+
+<h1>핀볼 레이스 (공 이름 + 장애물 드래그)</h1>
+
+<div id="controls">
+  공 개수: <input type="number" id="ballCount" value="2" min="1" max="20">
+  <button id="setBallsBtn">공 이름 설정</button>
+  <button id="startBtn">게임 시작</button>
+</div>
+
+<div id="ballNames"></div>
+
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let balls = [];
+let obstacles = [];
+let animationId;
+const 목표선X = canvas.width - 30;
+let isDragging = false;
+let dragStart = null;
+
+// Ball 클래스
+class Ball {
+  constructor(x, y, radius, color, name) {
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.color = color;
+    this.name = name;
+    this.vx = Math.random() * 2 + 1;
+    this.vy = Math.random() * 2 - 1;
+    this.도착 = false;
+  }
+
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    ctx.closePath();
+    ctx.fillStyle = "#fff";
+    ctx.font = "12px sans-serif";
+    ctx.fillText(this.name, this.x - this.radius, this.y - this.radius - 2);
+  }
+
+  update() {
+    if(this.도착) return;
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // 벽 충돌
+    if(this.y - this.radius < 0 || this.y + this.radius > canvas.height) this.vy *= -1;
+
+    // 장애물 충돌
+    obstacles.forEach(obs => {
+      if(this.x + this.radius > obs.x && this.x - this.radius < obs.x + obs.width &&
+         this.y + this.radius > obs.y && this.y - this.radius < obs.y + obs.height){
+        this.vx *= -1;
+        this.vy *= -1;
+      }
+    });
+
+    // 목표선 도착
+    if(this.x + this.radius >= 목표선X){
+      this.x = 목표선X - this.radius;
+      this.도착 = true;
+      alert(this.name + "가 승리!");
+      cancelAnimationFrame(animationId);
+    }
+  }
+}
+
+// 공 이름 설정 UI
+document.getElementById('setBallsBtn').addEventListener('click', () => {
+  const count = parseInt(document.getElementById('ballCount').value);
+  const container = document.getElementById('ballNames');
+  container.innerHTML = "";
+  for(let i=0; i<count; i++){
+    const input = document.createElement('input');
+    input.type = "text";
+    input.placeholder = `공 ${i+1} 이름`;
+    input.id = `ballName${i}`;
+    container.appendChild(input);
+  }
+});
+
+// 장애물 마우스 드래그
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  dragStart = {x: e.offsetX, y: e.offsetY};
+});
+
+canvas.addEventListener('mousemove', e => {
+  if(!isDragging) return;
+  const x = Math.min(dragStart.x, e.offsetX);
+  const y = Math.min(dragStart.y, e.offsetY);
+  const width = Math.abs(e.offsetX - dragStart.x);
+  const height = Math.abs(e.offsetY - dragStart.y);
+  obstacles[obstacles.length-1] = {x, y, width, height};
+  drawAll();
+});
+
+canvas.addEventListener('mouseup', e => {
+  if(isDragging){
+    isDragging = false;
+    dragStart = null;
+  }
+});
+
+// 게임 시작
+document.getElementById('startBtn').addEventListener('click', () => {
+  cancelAnimationFrame(animationId);
+  balls = [];
+
+  const count = parseInt(document.getElementById('ballCount').value);
+  for(let i=0; i<count; i++){
+    const nameInput = document.getElementById(`ballName${i}`);
+    const name = nameInput ? nameInput.value || `공${i+1}` : `공${i+1}`;
+    balls.push(new Ball(30, 50 + i*60, 20, '#'+Math.floor(Math.random()*16777215).toString(16), name));
+  }
+
+  animate();
+});
+
+// 그리기
+function drawAll(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 목표선
+  ctx.beginPath();
+  ctx.moveTo(목표선X,0);
+  ctx.lineTo(목표선X,canvas.height);
+  ctx.strokeStyle = "#00ff00";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.closePath();
+
+  // 장애물
+  obstacles.forEach(obs => {
+    ctx.fillStyle = "#888";
+    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+  });
+
+  balls.forEach(ball => ball.draw());
+}
+
+// 애니메이션
+function animate(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 목표선
+  ctx.beginPath();
+  ctx.moveTo(목표선X,0);
+  ctx.lineTo(목표선X,canvas.height);
+  ctx.strokeStyle = "#00ff00";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.closePath();
+
+  // 장애물
+  obstacles.forEach(obs => {
+    ctx.fillStyle = "#888";
+    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+  });
+
+  balls.forEach(ball => {
+    ball.update();
+    ball.draw();
+  });
+
+  animationId = requestAnimationFrame(animate);
+}
+
+</script>
+
+</body>
+</html>
